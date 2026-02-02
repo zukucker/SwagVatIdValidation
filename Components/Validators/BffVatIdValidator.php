@@ -26,6 +26,13 @@ abstract class BffVatIdValidator implements VatIdValidatorInterface
      * Additionally you can order an official mail confirmation for qualified confirmation requests.
      */
 
+    const DEBUG_STREET = 'Musterstrasse 22';
+    const DEBUG_COMPANY = 'Musterhaus GmbH & Co KG';
+    const DEBUG_POSTCODE = '12345';
+    const DEBUG_LOCATION = 'Musterort';
+    const DEBUG_A_USTID = 'DE123456789';
+    const DEBUG_B_USTID = 'ATU12345678';
+
     /**
      * @var VatIdValidatorResult
      */
@@ -46,6 +53,9 @@ abstract class BffVatIdValidator implements VatIdValidatorInterface
      */
     private $config;
 
+    /**
+     * @var ClientInterface
+     */
     private $guzzleClient;
 
     /**
@@ -72,12 +82,16 @@ abstract class BffVatIdValidator implements VatIdValidatorInterface
 
         $data = $this->getData($customerInformation, $shopInformation);
 
+        // is this still a thing?
+        //
         // The bff validator api does only support 'EL' as greece iso. Therefore, we replace the original GR with the EL.
-        $data['UstId_2'] = \str_replace('GR', 'EL', $data['UstId_2']);
+        //$data['UstId_2'] = \str_replace('GR', 'EL', $data['UstId_2']);
 
         $headers = [
             'Content-Type' => 'application/json',
         ];
+
+        $debug = true;
 
         try{
             $response = $this->guzzleClient->request(
@@ -89,12 +103,12 @@ abstract class BffVatIdValidator implements VatIdValidatorInterface
                         'Accept'       => 'application/json',
                     ],
                     'body' => json_encode([
-                        'anfragendeUstid' => 'DE123456789',
-                        'angefragteUstid' => 'ATU12345678',
-                        'firmenname' => 'Musterhaus GmbH & Co KG',
-                        'strasse' => 'Musterstrasse 22',
-                        'plz' => '12345',
-                        'ort' => 'musterort',
+                        'anfragendeUstid' => $debug ? self::DEBUG_A_USTID : $data['UstId_1'],
+                        'angefragteUstid' => $debug ? self::DEBUG_B_USTID : $data['UstId_2'],
+                        'firmenname' => $debug ? self::DEBUG_COMPANY : $data['Firmenname'],
+                        'strasse' => $debug ? self::DEBUG_STREET : $data['Strasse'],
+                        'plz' => $debug ? self::DEBUG_POSTCODE : $data['PLZ'],
+                        'ort' => $debug ? self::DEBUG_LOCATION : $data['Ort'],
                     ]),
                 ]
             );
@@ -116,6 +130,7 @@ abstract class BffVatIdValidator implements VatIdValidatorInterface
             $plainResponse = (string) $response->getBody();
             $jsonResponse = json_decode($plainResponse);
             $this->createSimpleValidatorResult($jsonResponse);
+            $this->addExtendedResults($jsonResponse);
         }
 
         return $this->result;

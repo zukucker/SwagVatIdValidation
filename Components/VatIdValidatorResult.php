@@ -42,7 +42,7 @@ class VatIdValidatorResult implements \Serializable
      * Status 31 happens when
      * - the check was executed and each was valid
      */
-    public const VALID = 'evatr-0000';
+    public const VALID = '31';
 
     /**
      * @var int
