@@ -89,13 +89,19 @@ abstract class BffVatIdValidator implements VatIdValidatorInterface
                         'Accept'       => 'application/json',
                     ],
                     'body' => json_encode([
-                        'anfragendeUstid' => $data['UstId_1'],
-                        'angefragteUstid' => $data['UstId_2'],
+                        'anfragendeUstid' => 'DE123456789',
+                        'angefragteUstid' => 'ATU12345678',
+                        'firmenname' => 'Musterhaus GmbH & Co KG',
+                        'strasse' => 'Musterstrasse 22',
+                        'plz' => '12345',
+                        'ort' => 'musterort',
                     ]),
                 ]
             );
             $plainResponse = (string) $response->getBody();
             $jsonResponse = json_decode($plainResponse);
+            dump($jsonResponse);
+            die();
 
             if (empty($jsonResponse)) {
                 $this->result->setServiceUnavailable();
