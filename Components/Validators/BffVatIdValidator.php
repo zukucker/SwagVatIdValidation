@@ -9,6 +9,9 @@ declare(strict_types=1);
 
 namespace SwagVatIdValidation\Components\Validators;
 
+use Shopware\Components\HttpClient\GuzzleFactory;
+use Shopware\Components\HttpClient\GuzzleHttpClient;
+use Shopware\Components\HttpClient\RequestException;
 use SwagVatIdValidation\Components\VatIdConfigReaderInterface;
 use SwagVatIdValidation\Components\VatIdCustomerInformation;
 use SwagVatIdValidation\Components\VatIdInformation;
@@ -43,14 +46,21 @@ abstract class BffVatIdValidator implements VatIdValidatorInterface
      */
     private $config;
 
+    private $guzzleClient;
+
     /**
      * Constructor sets the snippet namespace
      */
-    public function __construct(\Shopware_Components_Snippet_Manager $snippetManager, \Shopware_Components_Config $config)
+    public function __construct(
+        \Shopware_Components_Snippet_Manager $snippetManager, 
+        \Shopware_Components_Config $config,
+        GuzzleFactory $guzzleFactory
+    )
     {
         $this->snippetManager = $snippetManager;
         $this->config = $config;
         $this->confirmation = $this->config->get(VatIdConfigReaderInterface::OFFICIAL_CONFIRMATION);
+        $this->guzzleClient = $guzzleFactory->createClient();
     }
 
     /**
@@ -65,34 +75,41 @@ abstract class BffVatIdValidator implements VatIdValidatorInterface
         // The bff validator api does only support 'EL' as greece iso. Therefore, we replace the original GR with the EL.
         $data['UstId_2'] = \str_replace('GR', 'EL', $data['UstId_2']);
 
-        $apiRequest = 'https://evatr.bff-online.de/evatrRPC?';
-        $apiRequest .= \http_build_query($data, '', '&');
+        $headers = [
+            'Content-Type' => 'application/json',
+        ];
 
-        $context = \stream_context_create([
-            'http' => [
-                'method' => 'GET',
-                'header' => 'Content-Type: text/html; charset=utf-8',
-                'timeout' => 15,
-                'user_agent' => 'Shopware',
-            ],
-        ]);
-        $response = @\file_get_contents($apiRequest, false, $context);
+        try{
+            $response = $this->guzzleClient->request(
+                'POST',
+                'https://api.evatr.vies.bzst.de/app/v1/abfrage',
+                [
+                    'headers' => [
+                        'Content-Type' => 'application/json',
+                        'Accept'       => 'application/json',
+                    ],
+                    'body' => json_encode([
+                        'anfragendeUstid' => $data['UstId_1'],
+                        'angefragteUstid' => $data['UstId_2'],
+                    ]),
+                ]
+            );
+            $plainResponse = (string) $response->getBody();
+            $jsonResponse = json_decode($plainResponse);
 
-        $reg = '#<param>\s*<value><array><data>\s*<value><string>([^<]*)</string></value>\s*<value><string>([^<]*)</string></value>\s*</data></array></value>\s*</param>#msi';
+            if (empty($jsonResponse)) {
+                $this->result->setServiceUnavailable();
 
-        if (empty($response)) {
-            $this->result->setServiceUnavailable();
-
-            return $this->result;
-        }
-
-        if (\preg_match_all($reg, $response, $matches)) {
-            $response = \array_combine($matches[1], $matches[2]);
-            if (!\is_array($response)) {
-                throw new \RuntimeException('Invalid response');
+                return $this->result;
             }
-            $this->createSimpleValidatorResult($response);
-            $this->addExtendedResults($response);
+
+            $this->createSimpleValidatorResult($jsonResponse);
+            $this->addExtendedResults($jsonResponse);
+        }catch(\GuzzleHttp\Exception\RequestException $exception){
+            $response = $exception->getResponse();
+            $plainResponse = (string) $response->getBody();
+            $jsonResponse = json_decode($plainResponse);
+            $this->createSimpleValidatorResult($jsonResponse);
         }
 
         return $this->result;
@@ -117,14 +134,12 @@ abstract class BffVatIdValidator implements VatIdValidatorInterface
     /**
      * Helper function to set the VAT Id result of a confirmation request
      */
-    private function createSimpleValidatorResult(array $response): void
+    private function createSimpleValidatorResult($jsonResponse): void
     {
-        if ($response['ErrorCode'] === '200'
-            || $response['ErrorCode'] === '222'
-        ) {
+        if ($jsonResponse->status === 'evatr-0000') {
             return;
         }
 
-        $this->result->setVatIdInvalid($response['ErrorCode']);
+        $this->result->setVatIdInvalid($response->status);
     }
 }

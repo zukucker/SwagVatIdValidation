@@ -32,12 +32,14 @@
         <service id="SwagVatIdValidation\Components\Validators\SimpleBffVatIdValidator">
             <argument type="service" id="snippets"/>
             <argument type="service" id="config"/>
+            <argument type="service" id="Shopware\Components\HttpClient\GuzzleFactory"/>
             <tag name="vatId.validator"/>
         </service>
 
         <service id="SwagVatIdValidation\Components\Validators\ExtendedBffVatIdValidator">
             <argument type="service" id="snippets"/>
             <argument type="service" id="config"/>
+            <argument type="service" id="Shopware\Components\HttpClient\GuzzleFactory"/>
             <tag name="vatId.validator"/>
         </service>
 
